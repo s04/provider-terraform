@@ -1,0 +1,164 @@
+Custom Terraform Provider Setup with Crossplane (2024-03-19)
+=========================================================
+
+Project Goal
+-----------
+Create a custom Terraform provider for Crossplane that uses Terraform 1.8.0 to deploy a Talos cluster on Hetzner Cloud.
+
+Key Files Created
+----------------
+1. cluster/images/provider-terraform/Dockerfile - Custom provider image with Terraform 1.8.0
+2. package/crossplane.yaml - Provider package metadata
+3. examples/install-custom.yaml - Provider installation manifest
+4. examples/providerconfig-simple.yaml - Basic provider configuration using K8s backend
+5. examples/workspace-talos-hcloud.yaml - Talos cluster workspace configuration
+6. examples/hcloud-credentials-secret.yaml - Hetzner Cloud credentials
+
+Step-by-Step Process
+-------------------
+
+1. Created Custom Provider Dockerfile
+   - Base: alpine:3.20.3
+   - Terraform 1.8.0 from HashiCorp official releases
+   - Provider binary v0.18.0 from upbound/provider-terraform
+   - Required tools: ca-certificates, bash, git, curl, unzip
+   - Proper permissions and cache directory setup
+
+2. Built Multi-Platform Image
+   ```bash
+   # Create and use multi-platform builder
+   docker buildx create --name multiplatform-builder --driver docker-container --bootstrap
+   docker buildx use multiplatform-builder
+
+   # Build and push image
+   docker buildx build --platform linux/amd64,linux/arm64 \
+     --tag andalouse/provider-terraform:v0.18.0 \
+     --file cluster/images/provider-terraform/Dockerfile . \
+     --push
+   ```
+
+3. Created Provider Package
+   - Created package/crossplane.yaml with:
+     - Provider metadata
+     - Maintainer information
+     - Source repository
+     - License (Apache-2.0)
+     - Custom image reference
+
+4. Created Installation Manifest
+   - ControllerConfig with debug logging
+   - Provider spec referencing custom package
+   - Package hosted on Upbound Marketplace
+
+5. Created Simple Provider Config
+   - Uses Kubernetes backend for state
+   - In-cluster configuration
+   - Minimal setup without cloud specifics
+
+6. Created Talos Workspace
+   - Uses terraform-hcloud-talos module v2.11.9
+   - Single control plane configuration
+   - Hetzner Cloud token from secret
+   - Various configuration options (most commented for reference)
+
+7. Created Credentials Secret
+   - Stores Hetzner Cloud API token
+   - Used by workspace for authentication
+
+Publishing Options
+----------------
+
+Option 1: Direct Docker Hub Publishing
+--------------------------------
+1. Login to Docker Hub:
+   ```bash
+   docker login docker.io
+   ```
+
+2. Build multi-platform image:
+   ```bash
+   # Create and use multi-platform builder
+   docker buildx create --name multiplatform-builder --driver docker-container --bootstrap
+   docker buildx use multiplatform-builder
+
+   # Build and push image
+   docker buildx build --platform linux/amd64,linux/arm64 \
+     --tag docker.io/andalouse/provider-terraform:v0.18.0 \
+     --file cluster/images/provider-terraform/Dockerfile . \
+     --push
+   ```
+
+Option 2: Using Crossplane Package (xpkg)
+------------------------------------
+1. Install up CLI:
+   ```bash
+   curl -sL "https://cli.upbound.io" | sh
+   sudo mv up /usr/local/bin/
+   ```
+
+2. Build the package:
+   ```bash
+   up xpkg build --package-root=package/ --output=provider-terraform.xpkg
+   ```
+
+3. Push to Docker Hub:
+   ```bash
+   up xpkg push docker.io/andalouse/provider-terraform:v0.18.0 -f provider-terraform.xpkg
+   ```
+
+Note: The xpkg approach provides:
+- Better package metadata
+- Proper Crossplane package formatting
+- Better integration with Crossplane's package manager
+- But requires additional setup (up CLI)
+
+Deployment Steps
+---------------
+1. Deploy provider:
+   ```bash
+   kubectl apply -f examples/install-custom.yaml
+   ```
+
+2. Apply provider configuration:
+   ```bash
+   kubectl apply -f examples/providerconfig-simple.yaml
+   ```
+
+3. Create Hetzner credentials:
+   ```bash
+   kubectl apply -f examples/hcloud-credentials-secret.yaml
+   ```
+
+4. Deploy Talos workspace:
+   ```bash
+   kubectl apply -f examples/workspace-talos-hcloud.yaml
+   ```
+
+Important Notes
+--------------
+- Using latest stable Terraform (1.8.0)
+- Provider version v0.18.0
+- Multi-platform support (amd64, arm64)
+- State stored in Kubernetes secrets
+- Minimal configuration focused on Talos deployment
+- Talos module version v2.11.9
+- Debug logging enabled in provider
+
+Next Steps
+---------
+1. Monitor workspace status:
+   ```bash
+   kubectl get workspace talos-hcloud-cluster
+   ```
+
+2. Get cluster credentials:
+   ```bash
+   kubectl get secret talos-cluster-config -n default -o jsonpath='{.data.talosconfig}' | base64 -d > talosconfig
+   kubectl get secret talos-cluster-config -n default -o jsonpath='{.data.kubeconfig}' | base64 -d > kubeconfig
+   ```
+
+3. Test cluster access:
+   ```bash
+   export KUBECONFIG=./kubeconfig
+   kubectl get nodes
+   ``` 

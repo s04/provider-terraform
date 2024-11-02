@@ -1,0 +1,42 @@
+apiVersion: tf.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: talos-hcloud-cluster
+  annotations:
+    crossplane.io/external-name: talos-cluster
+spec:
+  providerConfigRef:
+    name: default
+  forProvider:
+    source: Remote
+    module: https://github.com/hcloud-talos/terraform-hcloud-talos/archive/refs/tags/v2.11.9.tar.gz
+    env:
+      - name: TF_VAR_hcloud_token
+        secretKeyRef:
+          namespace: default
+          name: hcloud-creds
+          key: hcloud_token
+    varmap:
+      talos_version: "v1.8.1"
+      # kubernetes_version: "1.29.7"
+      # cilium_version: "1.15.7"
+      cluster_name: "talos-cluster"
+      # cluster_name: "talos.example.com"
+      # cluster_domain: "cluster.talos.example.com"
+      # cluster_api_host: "kube.talos.example.com"
+      # firewall_use_current_ip: false
+      firewall_use_current_ip: true
+      # firewall_kube_api_source: ["YOUR_IP_ADDRESS/32"]
+      # firewall_talos_api_source: ["YOUR_IP_ADDRESS/32"]
+      datacenter_name: "fsn1-dc14"
+      control_plane_count: 1
+      control_plane_server_type: "cx22"
+      # worker_count: 3
+      # worker_server_type: "cax21"
+      # network_ipv4_cidr: "10.0.0.0/16"
+      # node_ipv4_cidr: "10.0.1.0/24"
+      # pod_ipv4_cidr: "10.0.16.0/20"
+      # service_ipv4_cidr: "10.0.8.0/21"
+  writeConnectionSecretToRef:
+    namespace: default
+    name: talos-cluster-config
